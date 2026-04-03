@@ -1,6 +1,6 @@
 # 429.rs — Distributed Rate Limiting for the Edge
 
-A proof-of-concept API gateway that enforces rate limits, built with Rust, FastAPI, React, Redis, and Kubernetes.
+A proof-of-concept API gateway that enforces rate limits, built with Rust, FastAPI, React, and Redis.
 
 ## Architecture
 
@@ -80,38 +80,11 @@ By default the rate limiter allows **10 requests per 60 seconds** per client IP 
 for i in $(seq 1 15); do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/products; done
 ```
 
-## Kubernetes / Helm
-
-```bash
-# Install with Helm
-helm install my-429rs ./helm/429rs
-
-# Override values
-helm install my-429rs ./helm/429rs \
-  --set rateLimiter.env.rateLimit=50 \
-  --set rateLimiter.env.windowSeconds=30 \
-  --set ingress.enabled=true \
-  --set ingress.gatewayHost=gateway.example.com \
-  --set ingress.dashboardHost=dashboard.example.com
-```
-
-The rate-limiter deployment ships with a **HorizontalPodAutoscaler** that scales between 2 and 10 replicas based on CPU utilisation. Because all replicas share Redis state, rate limits are correctly enforced across the entire pod fleet.
-
 ## Project Structure
 
 ```
 429.rs/
 ├── docker-compose.yml
-├── helm/
-│   └── 429rs/
-│       ├── Chart.yaml
-│       ├── values.yaml
-│       └── templates/
-│           ├── redis.yaml
-│           ├── fake-api.yaml
-│           ├── rate-limiter.yaml
-│           ├── bff.yaml
-│           └── ui.yaml
 └── services/
     ├── fake-api/        # FastAPI — simulated upstream
     ├── bff/             # FastAPI — config & metrics API
