@@ -1,0 +1,14 @@
+apiVersion: v2
+name: 429rs
+description: Helm chart for the 429.rs distributed rate-limiting gateway
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords:
+  - rate-limiting
+  - api-gateway
+  - rust
+
+maintainers:
+  - name: 429.rs contributors
