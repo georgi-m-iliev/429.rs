@@ -1,0 +1,123 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.header {
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  padding: 0 1.5rem;
+}
+
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+
+.brand {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #f97316;
+  margin-right: 0.75rem;
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tab {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tab:hover { background: #334155; color: #e2e8f0; }
+.tab.active { background: #f97316; color: #fff; }
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  width: 100%;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+  color: #f1f5f9;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn-primary { background: #f97316; color: #fff; }
+.btn-secondary { background: #334155; color: #e2e8f0; }
+.btn-danger { background: #ef4444; color: #fff; }
+
+.error-banner {
+  background: #450a0a;
+  border: 1px solid #dc2626;
+  color: #fca5a5;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.loading {
+  color: #94a3b8;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 480px;
+}
+
+.modal h3 {
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+  color: #f1f5f9;
+}

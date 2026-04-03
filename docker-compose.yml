@@ -1,0 +1,65 @@
+services:
+  # Redis — shared state for rate-limit counters and configuration
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Fake API — simulated upstream service protected by 429.rs
+  fake-api:
+    build: ./services/fake-api
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Rate Limiter — Rust gateway service (proxy + rate limiting)
+  rate-limiter:
+    build: ./services/rate-limiter
+    ports:
+      - "3000:3000"
+    environment:
+      LISTEN_ADDR: "0.0.0.0:3000"
+      UPSTREAM_URL: "http://fake-api:8000"
+      REDIS_URL: "redis://redis:6379"
+      RATE_LIMIT: "10"
+      WINDOW_SECONDS: "60"
+      RUST_LOG: "rate_limiter=info,tower_http=debug"
+    depends_on:
+      redis:
+        condition: service_healthy
+      fake-api:
+        condition: service_healthy
+
+  # BFF — FastAPI service for configuration and metrics
+  bff:
+    build: ./services/bff
+    ports:
+      - "8001:8001"
+    environment:
+      REDIS_URL: "redis://redis:6379"
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:80"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # UI — React dashboard
+  ui:
+    build: ./services/ui
+    ports:
+      - "80:80"
+    depends_on:
+      - bff
+
+volumes:
+  redis_data:
