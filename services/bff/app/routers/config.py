@@ -1,8 +1,7 @@
 """Config router — CRUD for services and rules stored in MongoDB."""
-from datetime import datetime, timezone
+import datetime
 
 from fastapi import APIRouter, HTTPException
-from beanie import DeleteRules
 
 from app.db import RuleConfig, ServiceConfig
 from app.schemas import RuleCreate, RuleResponse, RuleUpdate, ServiceCreate, ServiceUpdate, ServiceResponse
@@ -23,7 +22,7 @@ async def list_services(tenant_id: str | None = None):
 
 @router.post("/services", response_model=ServiceResponse, status_code=201)
 async def create_service(payload: ServiceCreate):
-    exists = await ServiceConfig.find_one(ServiceConfig.url == payload.url)
+    exists = await ServiceConfig.find_one(ServiceConfig.url == payload.url, fetch_links=True)
     if exists:
         raise HTTPException(status_code=409, detail=f"Service '{payload.url}' already exists")
 
@@ -40,6 +39,9 @@ async def update_service(service_id: str, payload: ServiceUpdate):
 
     update_data = payload.model_dump(exclude_unset=True)
     await service.set(update_data)
+    
+    service.updated_at = datetime.datetime.now(tz=datetime.timezone.utc)
+    await service.save()
     return service.to_response()
 
 
@@ -49,7 +51,8 @@ async def delete_service(service_id: str):
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
 
-    await service.delete(link_rule=DeleteRules.DELETE_LINKS)
+    await RuleConfig.find(RuleConfig.service.id == service.id).delete()
+    await service.delete()
 
 
 @router.get("/rules", response_model=list[RuleResponse])
@@ -90,6 +93,9 @@ async def update_rule(rule_id: str, payload: RuleUpdate):
 
     update_data = payload.model_dump(exclude_unset=True)
     await rule.set(update_data)
+
+    rule.updated_at = datetime.datetime.now(tz=datetime.timezone.utc)
+    await rule.save()
     return rule.to_response()
 
 

@@ -69,13 +69,14 @@ class ServiceConfig(Document):
 
     def to_response(self) -> ServiceResponse:
         rules = self.rules if isinstance(self.rules, list) else []
+        resolved_rules = [rule for rule in rules if hasattr(rule, "to_response")]
         return ServiceResponse(
             id=str(self.id),
             tenant_id=self.tenant_id,
             url=self.url,
             description=self.description,
             enabled=self.enabled,
-            rules=[rule.to_response() for rule in rules],
+            rules=[rule.to_response() for rule in resolved_rules],
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
