@@ -1,4 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  Alert,
+  Button,
+  Group,
+  SimpleGrid,
+  Skeleton,
+  Table,
+  Text,
+  Paper,
+} from '@mantine/core'
+import { IconAlertCircle, IconRefresh, IconTrash } from '@tabler/icons-react'
 
 type MetricEntry = {
   client_ip: string
@@ -17,9 +28,8 @@ export default function MetricsDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
-      setLoading(true)
       setError(null)
       const res = await fetch('/api/metrics/summary')
       if (!res.ok) throw new Error('Failed to fetch metrics')
@@ -29,7 +39,7 @@ export default function MetricsDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   const handleReset = async () => {
     if (!confirm('Reset all rate-limit counters?')) return
@@ -41,116 +51,86 @@ export default function MetricsDashboard() {
     load()
     const interval = setInterval(load, 5000)
     return () => clearInterval(interval)
-  }, [])
+  }, [load])
 
   return (
-    <div>
-      <div className="section-header">
-        <h2>Live Metrics</h2>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-secondary" onClick={load}>Refresh</button>
-          <button className="btn btn-danger" onClick={handleReset}>Reset</button>
-        </div>
-      </div>
+    <>
+      <Group justify="space-between" mb="lg">
+        <Text fw={600} size="lg">Live Metrics</Text>
+        <Group gap="xs">
+          <Button
+            variant="default"
+            leftSection={<IconRefresh size={16} />}
+            onClick={load}
+            loading={loading}
+          >
+            Refresh
+          </Button>
+          <Button
+            color="red"
+            variant="light"
+            leftSection={<IconTrash size={16} />}
+            onClick={handleReset}
+          >
+            Reset
+          </Button>
+        </Group>
+      </Group>
 
-      {error && <div className="error-banner">{error}</div>}
-
-      {loading && <p className="loading">Loading metrics…</p>}
-
-      {!loading && summary && (
-        <>
-          <div className="stats-row">
-            <div className="stat-card">
-              <div className="stat-value">{summary.total_tracked_clients}</div>
-              <div className="stat-label">Tracked Clients</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value">
-                {summary.entries.reduce((a, e) => a + e.request_count, 0)}
-              </div>
-              <div className="stat-label">Total Requests</div>
-            </div>
-          </div>
-
-          {summary.entries.length === 0 ? (
-            <p style={{ color: '#94a3b8' }}>
-              No active rate-limit windows. Make some requests through the gateway!
-            </p>
-          ) : (
-            <div className="table-wrapper">
-              <table className="rules-table">
-                <thead>
-                  <tr>
-                    <th>Client IP</th>
-                    <th>Path</th>
-                    <th>Requests</th>
-                    <th>TTL (s)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.entries.map((entry, i) => (
-                    <tr key={i}>
-                      <td><code>{entry.client_ip}</code></td>
-                      <td><code>{entry.path}</code></td>
-                      <td>{entry.request_count}</td>
-                      <td>{entry.ttl_seconds}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+      {error && (
+        <Alert icon={<IconAlertCircle size={16} />} color="red" mb="md">
+          {error}
+        </Alert>
       )}
 
-      <style>{`
-        .stats-row {
-          display: flex;
-          gap: 1rem;
-          margin-bottom: 1.5rem;
-        }
-        .stat-card {
-          background: #1e293b;
-          border: 1px solid #334155;
-          border-radius: 8px;
-          padding: 1.25rem 1.5rem;
-          min-width: 160px;
-        }
-        .stat-value {
-          font-size: 2rem;
-          font-weight: 700;
-          color: #f97316;
-        }
-        .stat-label {
-          font-size: 0.8rem;
-          color: #94a3b8;
-          margin-top: 0.25rem;
-        }
-        .table-wrapper {
-          overflow-x: auto;
-          border-radius: 8px;
-          border: 1px solid #334155;
-        }
-        .rules-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        .rules-table th, .rules-table td {
-          padding: 0.75rem 1rem;
-          text-align: left;
-          border-bottom: 1px solid #334155;
-        }
-        .rules-table thead th {
-          background: #1e293b;
-          color: #94a3b8;
-          font-size: 0.8rem;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-        .rules-table tbody tr:last-child td { border-bottom: none; }
-        .rules-table tbody tr:hover { background: #1e293b; }
-        code { font-family: monospace; color: #7dd3fc; }
-      `}</style>
-    </div>
+      {loading && !summary ? (
+        <SimpleGrid cols={2} mb="lg">
+          <Skeleton height={90} radius="md" />
+          <Skeleton height={90} radius="md" />
+        </SimpleGrid>
+      ) : summary ? (
+        <>
+          <SimpleGrid cols={2} mb="lg">
+            <Paper p="lg" withBorder>
+              <Text size="xl" fw={700} c="orange">{summary.total_tracked_clients}</Text>
+              <Text size="xs" c="dimmed" mt={4}>Tracked Clients</Text>
+            </Paper>
+            <Paper p="lg" withBorder>
+              <Text size="xl" fw={700} c="orange">
+                {summary.entries.reduce((a, e) => a + e.request_count, 0)}
+              </Text>
+              <Text size="xs" c="dimmed" mt={4}>Total Requests</Text>
+            </Paper>
+          </SimpleGrid>
+
+          {summary.entries.length === 0 ? (
+            <Text c="dimmed" ta="center" py="xl">
+              No active rate-limit windows. Make some requests through the gateway!
+            </Text>
+          ) : (
+            <Table striped highlightOnHover withTableBorder withColumnBorders>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Client IP</Table.Th>
+                  <Table.Th>Path</Table.Th>
+                  <Table.Th>Requests</Table.Th>
+                  <Table.Th>TTL (s)</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {summary.entries.map((entry, i) => (
+                  <Table.Tr key={i}>
+                    <Table.Td><Text ff="monospace" size="sm">{entry.client_ip}</Text></Table.Td>
+                    <Table.Td><Text ff="monospace" size="sm">{entry.path}</Text></Table.Td>
+                    <Table.Td>{entry.request_count}</Table.Td>
+                    <Table.Td>{entry.ttl_seconds}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          )}
+        </>
+      ) : null}
+    </>
   )
 }
