@@ -1,4 +1,5 @@
 import datetime
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -45,10 +46,10 @@ class FakeServiceConfig:
 
     @classmethod
     async def find_one(cls, *_args, **_kwargs):
-        return None
+        return next(iter(cls.store.values()), None)
 
     @classmethod
-    async def get(cls, service_id: str):
+    async def get(cls, service_id: str, *_args, **_kwargs):
         return cls.store.get(service_id)
 
     @classmethod
@@ -60,6 +61,13 @@ class FakeServiceConfig:
         return FakeQuery(list(cls.store.values()))
 
     async def insert(self):
+        FakeServiceConfig.store[self.id] = self
+
+    async def set(self, payload: dict[str, Any]):
+        for key, value in payload.items():
+            setattr(self, key, value)
+
+    async def save(self):
         FakeServiceConfig.store[self.id] = self
 
     async def delete(self, *_args, **_kwargs):
@@ -107,7 +115,7 @@ class FakeRuleConfig:
         }
 
     @classmethod
-    async def get(cls, rule_id: str):
+    async def get(cls, rule_id: str, *_args, **_kwargs):
         return cls.store.get(rule_id)
 
     @classmethod
@@ -127,12 +135,13 @@ class FakeRuleConfig:
     async def save(self):
         FakeRuleConfig.store[self.id] = self
 
-    async def delete(self):
-        FakeRuleConfig.store.pop(self.id, None)
-
-    def update(self, payload: dict):
+    async def set(self, payload: dict[str, Any]):
         for key, value in payload.items():
             setattr(self, key, value)
+        FakeRuleConfig.store[self.id] = self
+
+    async def delete(self):
+        FakeRuleConfig.store.pop(self.id, None)
 
     def to_response(self):
         limit = self.limit.model_dump() if hasattr(self.limit, "model_dump") else self.limit
@@ -161,22 +170,94 @@ def mocked_config_db(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(config_router, "RuleConfig", FakeRuleConfig)
 
 
-def test_services_and_rules_endpoints(client: TestClient, mocked_config_db) -> None:
-    created_service = client.post(
+def _create_service(client: TestClient, tenant_id: str = "tenant-1", url: str = "https://svc.local") -> str:
+    response = client.post(
         "/api/config/services",
-        json={"tenant_id": "tenant-1", "url": "https://svc.local", "description": "Products API"},
+        json={"tenant_id": tenant_id, "url": url, "description": "Products API"},
     )
-    assert created_service.status_code == 201
-    service_id = created_service.json()["id"]
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+def _create_rule(client: TestClient, service_id: str, name: str = "products") -> str:
+    response = client.post(
+        "/api/config/rules",
+        json={
+            "service_id": service_id,
+            "name": name,
+            "path_pattern": "/products",
+            "limit": {"enabled": True, "requests": 10, "window_seconds": 60},
+            "priority": 100,
+            "header_overrides": [],
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+def test_list_services_returns_items(client: TestClient, mocked_config_db) -> None:
+    _create_service(client)
 
     listed_services = client.get("/api/config/services")
     assert listed_services.status_code == 200
     assert len(listed_services.json()) == 1
 
+
+def test_list_services_with_tenant_id(client: TestClient, mocked_config_db) -> None:
+    _create_service(client, tenant_id="tenant-a", url="https://svc-a.local")
+
+    listed_services = client.get("/api/config/services?tenant_id=tenant-a")
+    assert listed_services.status_code == 200
+    assert len(listed_services.json()) == 1
+
+
+def test_create_service_conflict(client: TestClient, mocked_config_db) -> None:
+    _create_service(client)
+
+    duplicate = client.post(
+        "/api/config/services",
+        json={"tenant_id": "tenant-1", "url": "https://svc.local", "description": "Products API"},
+    )
+    assert duplicate.status_code == 409
+
+
+def test_update_service_not_found(client: TestClient, mocked_config_db) -> None:
+    updated = client.put(
+        "/api/config/services/missing",
+        json={"url": "https://svc-updated.local", "description": "new", "enabled": True},
+    )
+    assert updated.status_code == 404
+
+
+def test_update_service_success(client: TestClient, mocked_config_db) -> None:
+    service_id = _create_service(client)
+
+    updated = client.put(
+        f"/api/config/services/{service_id}",
+        json={"url": "https://svc-updated.local", "description": "Updated service", "enabled": True},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["description"] == "Updated service"
+
+
+def test_list_rules_requires_service_id(client: TestClient, mocked_config_db) -> None:
+    listed_rules = client.get("/api/config/rules")
+    assert listed_rules.status_code == 422
+
+
+def test_list_rules_returns_service_rules(client: TestClient, mocked_config_db) -> None:
+    service_id = _create_service(client)
+    _create_rule(client, service_id)
+
+    listed_rules = client.get(f"/api/config/rules?service_id={service_id}")
+    assert listed_rules.status_code == 200
+    assert len(listed_rules.json()) == 1
+
+def test_create_rule_service_not_found(client: TestClient, mocked_config_db) -> None:
     created_rule = client.post(
         "/api/config/rules",
         json={
-            "service_id": service_id,
+            "service_id": "missing-service",
             "name": "products",
             "path_pattern": "/products",
             "limit": {"enabled": True, "requests": 10, "window_seconds": 60},
@@ -184,12 +265,45 @@ def test_services_and_rules_endpoints(client: TestClient, mocked_config_db) -> N
             "header_overrides": [],
         },
     )
-    assert created_rule.status_code == 201
-    rule_id = created_rule.json()["id"]
+    assert created_rule.status_code == 404
 
-    listed_rules = client.get(f"/api/config/rules?service_id={service_id}")
-    assert listed_rules.status_code == 200
-    assert len(listed_rules.json()) == 1
+
+def test_update_rule_not_found(client: TestClient, mocked_config_db) -> None:
+    updated_rule = client.put(
+        "/api/config/rules/missing",
+        json={
+            "service_id": None,
+            "name": "new-name",
+            "path_pattern": "/products",
+            "limit": {"enabled": True, "requests": 20, "window_seconds": 60},
+            "priority": 10,
+            "header_overrides": [],
+        },
+    )
+    assert updated_rule.status_code == 404
+
+
+def test_update_rule_service_not_found(client: TestClient, mocked_config_db) -> None:
+    service_id = _create_service(client)
+    rule_id = _create_rule(client, service_id)
+
+    updated_rule = client.put(
+        f"/api/config/rules/{rule_id}",
+        json={
+            "service_id": "missing-service",
+            "name": "products-updated",
+            "path_pattern": "/products",
+            "limit": {"enabled": True, "requests": 20, "window_seconds": 60},
+            "priority": 10,
+            "header_overrides": [],
+        },
+    )
+    assert updated_rule.status_code == 404
+
+
+def test_update_rule_success(client: TestClient, mocked_config_db) -> None:
+    service_id = _create_service(client)
+    rule_id = _create_rule(client, service_id)
 
     updated_rule = client.put(
         f"/api/config/rules/{rule_id}",
@@ -205,8 +319,22 @@ def test_services_and_rules_endpoints(client: TestClient, mocked_config_db) -> N
     assert updated_rule.status_code == 200
     assert updated_rule.json()["priority"] == 10
 
-    deleted_rule = client.delete(f"/api/config/rules/{rule_id}")
-    assert deleted_rule.status_code == 204
+
+def test_delete_rule_not_found(client: TestClient, mocked_config_db) -> None:
+    deleted_rule = client.delete("/api/config/rules/missing")
+    assert deleted_rule.status_code == 404
+
+
+def test_delete_service_cascades_rules(client: TestClient, mocked_config_db) -> None:
+    service_id = _create_service(client)
+    rule_id = _create_rule(client, service_id)
 
     deleted_service = client.delete(f"/api/config/services/{service_id}")
     assert deleted_service.status_code == 204
+
+    listed_rules_after_service_delete = client.get(f"/api/config/rules?service_id={service_id}")
+    assert listed_rules_after_service_delete.status_code == 200
+    assert listed_rules_after_service_delete.json() == []
+
+    deleted_rule = client.delete(f"/api/config/rules/{rule_id}")
+    assert deleted_rule.status_code == 404
