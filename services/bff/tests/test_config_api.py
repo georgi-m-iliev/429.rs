@@ -52,7 +52,7 @@ class FakeServiceConfig:
         return cls.store.get(service_id)
 
     @classmethod
-    def find_all(cls):
+    def find_all(cls, *_args, **_kwargs):
         return FakeQuery(list(cls.store.values()))
 
     @classmethod
@@ -62,7 +62,7 @@ class FakeServiceConfig:
     async def insert(self):
         FakeServiceConfig.store[self.id] = self
 
-    async def delete(self):
+    async def delete(self, *_args, **_kwargs):
         FakeServiceConfig.store.pop(self.id, None)
 
     def to_response(self):
@@ -187,7 +187,7 @@ def test_services_and_rules_endpoints(client: TestClient, mocked_config_db) -> N
     assert created_rule.status_code == 201
     rule_id = created_rule.json()["id"]
 
-    listed_rules = client.get("/api/config/rules")
+    listed_rules = client.get(f"/api/config/rules?service_id={service_id}")
     assert listed_rules.status_code == 200
     assert len(listed_rules.json()) == 1
 

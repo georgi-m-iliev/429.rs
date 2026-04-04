@@ -3,10 +3,10 @@ import datetime
 from beanie import init_beanie, Document, Link, BackLink
 from pymongo import ASCENDING, IndexModel
 from pymongo import AsyncMongoClient
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, Field
 
 from app.settings import get_settings
-from app.schemas import RuleResponse, ServiceResponse
+from app.schemas import HeaderOverrideSchema, LimitSchema, RuleResponse, ServiceResponse
 
 settings = get_settings()
 _mongo_client: AsyncMongoClient | None = None
@@ -16,25 +16,14 @@ def utc_now() -> datetime.datetime:
     return datetime.datetime.now(tz=datetime.timezone.utc)
 
 
-class Limit(BaseModel):
-    enabled: bool = True
-    requests: int = Field(..., ge=1)
-    window_seconds: int = Field(..., ge=1)
-
-
-class HeaderOverride(BaseModel):
-    header_name: str = Field(..., min_length=1)
-    header_value: str = Field(..., min_length=1)
-
-
 class RuleConfig(Document):
-    service: Link["Service"]
+    service: Link["ServiceConfig"]
     enabled: bool = True
     name: str = Field(..., min_length=1)
     path_pattern: str = Field(..., min_length=1, description="Path pattern, e.g. /api/*")
-    limit: Limit
+    limit: LimitSchema
     priority: int = Field(default=100, ge=0, description="Lower numbers have higher priority")
-    header_overrides: list[HeaderOverride] = Field(default_factory=list)
+    header_overrides: list[HeaderOverrideSchema] = Field(default_factory=list)
     created_at: datetime.datetime = Field(default_factory=utc_now)
     updated_at: datetime.datetime = Field(default_factory=utc_now)
 
@@ -66,7 +55,7 @@ class ServiceConfig(Document):
     enabled: bool = True
     url: AnyHttpUrl
     description: str | None = None
-    rules: list[BackLink[RuleConfig]]
+    rules: list[BackLink[RuleConfig]] = Field(default_factory=list, original_field="service")
     created_at: datetime.datetime = Field(default_factory=utc_now)
     updated_at: datetime.datetime = Field(default_factory=utc_now)
 
@@ -79,13 +68,14 @@ class ServiceConfig(Document):
         ]
 
     def to_response(self) -> ServiceResponse:
+        rules = self.rules if isinstance(self.rules, list) else []
         return ServiceResponse(
             id=str(self.id),
             tenant_id=self.tenant_id,
             url=self.url,
             description=self.description,
             enabled=self.enabled,
-            rules=[rule.to_response() for rule in self.rules],
+            rules=[rule.to_response() for rule in rules],
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
@@ -106,5 +96,5 @@ async def close():
     if _mongo_client is None:
         return
 
-    _mongo_client.close()
+    await _mongo_client.close()
     _mongo_client = None
