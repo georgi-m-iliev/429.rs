@@ -14,10 +14,10 @@ import {
   Skeleton,
 } from '@mantine/core'
 import { IconPlus, IconTrash, IconEdit, IconAlertCircle } from '@tabler/icons-react'
-import type { Rule, RuleCreate, RuleUpdate, Service, ServiceCreate } from '../types'
+import type { Rule, RuleCreate, RuleUpdate, Service, ServiceCreate, ServiceUpdate } from '../types'
 import ServiceForm from './ServiceForm'
 import RuleForm from './RuleForm'
-import { createService, deleteRule, deleteService, createRule, updateRule } from '../api'
+import { createService, updateService, deleteRule, deleteService, createRule, updateRule } from '../api'
 
 type Props = {
   services: Service[]
@@ -28,6 +28,7 @@ type Props = {
 
 export default function ServicesView({ services, loading, error, onRefresh }: Props) {
   const [serviceModalOpen, setServiceModalOpen] = useState(false)
+  const [editingService, setEditingService] = useState<Service | null>(null)
   const [ruleModalService, setRuleModalService] = useState<Service | null>(null)
   const [editingRule, setEditingRule] = useState<{ rule: Rule; service: Service } | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -40,6 +41,18 @@ export default function ServicesView({ services, loading, error, onRefresh }: Pr
       onRefresh()
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Failed to create service')
+    }
+  }
+
+  const handleUpdateService = async (data: ServiceUpdate) => {
+    if (!editingService) return
+    setActionError(null)
+    try {
+      await updateService(editingService.id, data)
+      setEditingService(null)
+      onRefresh()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Failed to update service')
     }
   }
 
@@ -142,6 +155,14 @@ export default function ServicesView({ services, loading, error, onRefresh }: Pr
                     >
                       Add Rule
                     </Button>
+                    <Tooltip label="Edit service">
+                      <ActionIcon
+                        variant="subtle"
+                        onClick={() => setEditingService(service)}
+                      >
+                        <IconEdit size={16} />
+                      </ActionIcon>
+                    </Tooltip>
                     <Tooltip label="Delete service">
                       <ActionIcon
                         color="red"
@@ -235,6 +256,22 @@ export default function ServicesView({ services, loading, error, onRefresh }: Pr
           onSave={handleCreateService}
           onCancel={() => setServiceModalOpen(false)}
         />
+      </Modal>
+
+      {/* Edit Service modal */}
+      <Modal
+        opened={!!editingService}
+        onClose={() => setEditingService(null)}
+        title={`Edit Service — ${editingService?.url ?? ''}`}
+        size="md"
+      >
+        {editingService && (
+          <ServiceForm
+            service={editingService}
+            onSave={handleUpdateService}
+            onCancel={() => setEditingService(null)}
+          />
+        )}
       </Modal>
 
       {/* Create Rule modal */}

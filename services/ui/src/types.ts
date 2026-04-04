@@ -40,6 +40,12 @@ export type ServiceCreate = {
   description?: string | null
 }
 
+export type ServiceUpdate = {
+  url?: string
+  description?: string | null
+  enabled?: boolean
+}
+
 export type RuleCreate = {
   service_id: string
   name: string
