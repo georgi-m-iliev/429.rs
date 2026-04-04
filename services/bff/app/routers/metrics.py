@@ -2,7 +2,7 @@
 Metrics router — exposes rate-limit counters stored by the Rust rate-limiter service.
 """
 from fastapi import APIRouter
-from app.redis_client import get_redis
+from app.redis import get_redis
 
 router = APIRouter()
 

@@ -12,6 +12,18 @@ services:
       timeout: 3s
       retries: 5
 
+  mongo:
+    image: mongo:8
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   # Fake API — simulated upstream service protected by 429.rs
   fake-api:
     build: ./services/fake-api
@@ -48,7 +60,7 @@ services:
       - "8001:8001"
     environment:
       REDIS_URL: "redis://redis:6379"
-      CORS_ORIGINS: "http://localhost:5173,http://localhost:80"
+      # CORS_ORIGINS: "['http://localhost:5173','http://localhost:8080']"
     depends_on:
       redis:
         condition: service_healthy
@@ -63,3 +75,4 @@ services:
 
 volumes:
   redis_data:
+  mongo_data:

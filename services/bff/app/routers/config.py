@@ -1,74 +1,96 @@
-"""
-Config router — CRUD for rate-limit rules stored in Redis.
-"""
-import json
+"""Config router — CRUD for services and rules stored in MongoDB."""
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-from app.redis_client import get_redis
+
+from app.db import RuleConfig, ServiceConfig
+from app.schemas import RuleCreate, RuleResponse, RuleUpdate, ServiceCreate, ServiceResponse
 
 router = APIRouter()
 
-CONFIG_KEY = "rl:config:rules"
+async def _service_rules(service_id: str) -> list[RuleResponse]:
+    rules = await RuleConfig.find(RuleConfig.service.id == service_id).to_list()
+    return [rule.to_response() for rule in rules]
 
 
-class RateLimitRule(BaseModel):
-    id: str = Field(..., description="Unique rule identifier")
-    path: str = Field(..., description="URL path pattern to match, e.g. /api/*")
-    limit: int = Field(..., ge=1, description="Maximum requests allowed in the window")
-    window_seconds: int = Field(..., ge=1, description="Time window in seconds")
-    enabled: bool = Field(default=True)
+@router.get("/services", response_model=list[ServiceResponse])
+async def list_services(tenant_id: str | None = None):
+    query = ServiceConfig.find_all() if tenant_id is None else ServiceConfig.find(ServiceConfig.tenant_id == tenant_id)
+    services = await query.to_list()
+    response: list[ServiceResponse] = []
+    for service in services:
+        rules = await _service_rules(str(service.id))
+        response.append(service.to_response())
+    return response
 
 
-@router.get("/rules", response_model=list[RateLimitRule])
-async def list_rules():
-    """Return all configured rate-limit rules."""
-    r = get_redis()
-    raw = await r.get(CONFIG_KEY)
-    if not raw:
-        return []
-    return [RateLimitRule(**rule) for rule in json.loads(raw)]
+@router.post("/services", response_model=ServiceResponse, status_code=201)
+async def create_service(payload: ServiceCreate):
+    exists = await ServiceConfig.find_one(ServiceConfig.url == payload.url)
+    if exists is not None:
+        raise HTTPException(status_code=409, detail=f"Service '{payload.url}' already exists")
+
+    service = ServiceConfig(**payload.model_dump())
+    await service.insert()
+    return service.to_response()
 
 
-@router.post("/rules", response_model=RateLimitRule, status_code=201)
-async def create_rule(rule: RateLimitRule):
-    """Create a new rate-limit rule."""
-    r = get_redis()
-    raw = await r.get(CONFIG_KEY)
-    rules: list[dict] = json.loads(raw) if raw else []
+@router.delete("/services/{service_id}", status_code=204)
+async def delete_service(service_id: str):
+    service = await ServiceConfig.get(service_id)
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
 
-    if any(existing["id"] == rule.id for existing in rules):
-        raise HTTPException(status_code=409, detail=f"Rule '{rule.id}' already exists")
-
-    rules.append(rule.model_dump())
-    await r.set(CONFIG_KEY, json.dumps(rules))
-    return rule
+    await RuleConfig.find(RuleConfig.service.id == service.id).delete()
+    await service.delete()
 
 
-@router.put("/rules/{rule_id}", response_model=RateLimitRule)
-async def update_rule(rule_id: str, rule: RateLimitRule):
-    """Update an existing rate-limit rule."""
-    r = get_redis()
-    raw = await r.get(CONFIG_KEY)
-    rules: list[dict] = json.loads(raw) if raw else []
+@router.get("/rules", response_model=list[RuleResponse])
+async def list_rules(service_id: str | None = None):
+    if service_id is None:
+        rules = await RuleConfig.find_all().to_list()
+    else:
+        rules = await RuleConfig.find(RuleConfig.service.id == service_id).to_list()
+    return [rule.to_response() for rule in rules]
 
-    for i, existing in enumerate(rules):
-        if existing["id"] == rule_id:
-            rules[i] = rule.model_dump()
-            await r.set(CONFIG_KEY, json.dumps(rules))
-            return rule
 
-    raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")
+@router.post("/rules", response_model=RuleResponse, status_code=201)
+async def create_rule(payload: RuleCreate):
+    service = await ServiceConfig.get(payload.service_id)
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+
+    rule = RuleConfig(
+        service=service,
+        name=payload.name,
+        path_pattern=payload.path_pattern,
+        limit=payload.limit,
+        priority=payload.priority,
+        header_overrides=payload.header_overrides,
+    )
+    await rule.insert()
+    return rule.to_response()
+
+
+@router.put("/rules/{rule_id}", response_model=RuleResponse)
+async def update_rule(rule_id: str, payload: RuleUpdate):
+    rule = await RuleConfig.get(rule_id)
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    service = await ServiceConfig.get(payload.service_id)
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+
+    rule.update(payload.model_dump(exclude_unset=True))
+
+    await rule.save()
+    return rule.to_response()
 
 
 @router.delete("/rules/{rule_id}", status_code=204)
 async def delete_rule(rule_id: str):
-    """Delete a rate-limit rule."""
-    r = get_redis()
-    raw = await r.get(CONFIG_KEY)
-    rules: list[dict] = json.loads(raw) if raw else []
-
-    updated = [r_ for r_ in rules if r_["id"] != rule_id]
-    if len(updated) == len(rules):
-        raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")
-
-    await r.set(CONFIG_KEY, json.dumps(updated))
+    rule = await RuleConfig.get(rule_id)
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    await rule.delete()
