@@ -30,6 +30,7 @@ export default function MetricsDashboard() {
 
   const load = useCallback(async () => {
     try {
+      setLoading(true)
       setError(null)
       const res = await fetch('/api/metrics/summary')
       if (!res.ok) throw new Error('Failed to fetch metrics')

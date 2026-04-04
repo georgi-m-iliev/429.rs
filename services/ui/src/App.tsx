@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   AppShell,
-  Button,
   Container,
   Group,
   Tabs,
@@ -40,19 +39,9 @@ export default function App() {
     <AppShell header={{ height: 60 }}>
       <AppShell.Header>
         <Container size="xl" h="100%">
-          <Group h="100%" justify="space-between">
-            <Group gap="xs">
-              <Title order={3} c="orange">429.rs</Title>
-              <Text size="sm" c="dimmed">Rate Limit Dashboard</Text>
-            </Group>
-            <Button
-              variant="subtle"
-              size="xs"
-              c="dimmed"
-              onClick={activeTab === 'services' ? loadServices : undefined}
-            >
-              {activeTab === 'services' ? 'Refresh' : ''}
-            </Button>
+          <Group h="100%">
+            <Title order={3} c="orange">429.rs</Title>
+            <Text size="sm" c="dimmed">Rate Limit Dashboard</Text>
           </Group>
         </Container>
       </AppShell.Header>
