@@ -1,14 +1,14 @@
-[ ] - Implement BFF functionalities for multi-user configuration of the gateway
-       * definitions of multiple hosts with multiple routes
+[ 50% ] - Implement BFF functionalities for multi-user configuration of the gateway 
+       * definitions of multiple hosts with multiple routes ✅
        * global per host rate limits
-       * per route rate limits
-       * custom headers for overriding the limits
-       * [AI proposed] define deterministic rule resolution/precedence for overlapping host and route rules
+       * per route rate limits ✅
+       * custom headers for overriding the limits ✅
+       * [AI proposed] define deterministic rule resolution/precedence for overlapping host and route rules ✅
        * [AI proposed] add authentication/authorization for config management endpoints
        * [AI proposed] add config versioning and migration strategy for future schema changes
        * [AI proposed] introduce API contract tests between UI and BFF for config endpoints
 
-[ ] - Implement the Frontend features to support the newly implemented BFF functionalities
+[✅] - Implement the Frontend features to support the newly implemented BFF functionalities
        * Transition to a UI kit library
        * Make the fetching of data / reloading smoother and seamless to the user
        * [AI proposed] add role-aware UI states for read-only vs admin configuration access
