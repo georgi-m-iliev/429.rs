@@ -1,6 +1,6 @@
 # 429.rs — Distributed Rate Limiting for the Edge
 
-A proof-of-concept API gateway that enforces rate limits, built with Rust, FastAPI, React, and Redis.
+A proof-of-concept API gateway that enforces rate limits, built with Rust, FastAPI, React, MongoDB, and Redis.
 
 ## Architecture
 
@@ -10,27 +10,32 @@ Browser ──────────►  React UI  (dashboard + rule managemen
                   └───────────────┬────────────────────────────┘
                                   │ /api/*
                   ┌───────────────▼────────────────────────────┐
-                  │  BFF (FastAPI)  — config & metrics API      │
+                  │  BFF (FastAPI)  — config & metrics API     │
                   └───────────────┬────────────────────────────┘
-                                  │
-                              Redis ◄──────────────────────────┐
-                                  │                            │
-                  ┌───────────────▼────────────────────────────┤
-Client ───────────►  Rate Limiter (Rust / Axum)  — gateway     │
-                  └───────────────┬────────────────────────────┘
+                           ┌──────┴─────┐
+                           │            │
+                   ┌───────▼──────┐  ┌──▼────────────────────────────┐
+                   │   MongoDB    │  │ Redis (shared counters store) │
+                   │   (config)   │  └──▲────────────────────────────┘
+                   └──────────────┘     │
+                                        │
+                  ┌─────────────────────┴─────────────────────────────┐
+Client ───────────► Rate Limiter instances (Rust / Axum)  — gateway   │
+                  └───────────────┬───────────────────────────────────┘
                                   │ proxied (if under limit)
                   ┌───────────────▼────────────────────────────┐
-                  │  Fake API (FastAPI)  — simulated upstream   │
+                  │  Fake API (FastAPI)  — simulated upstream  │
                   └────────────────────────────────────────────┘
 ```
 
-| Component | Tech | Port |
-|---|---|---|
-| **UI** | React + Vite + nginx | `80` |
-| **BFF** | Python / FastAPI | `8001` |
-| **Rate Limiter** | Rust / Axum | `3000` |
-| **Fake API** | Python / FastAPI | `8000` |
-| **Redis** | Redis 7 | `6379` |
+| Component          | Tech                    | Port    |
+|--------------------|-------------------------|---------|
+| **UI**             | React + Vite + nginx    | `80`    |
+| **BFF**            | Python / FastAPI        | `8001`  |
+| **Rate Limiter**   | Rust / Axum             | `3000`  |
+| **Fake API**       | Python / FastAPI        | `8000`  |
+| **Redis**          | Redis 7                 | `6379`  |
+| **MongoDB**        | MongoDB                 | `27017` |
 
 ## Services
 
@@ -56,7 +61,7 @@ Environment variables:
 A simple REST API with product and user endpoints that represents the external service being protected.
 
 ### `services/bff` (Python / FastAPI)
-Backend For Frontend — manages rate-limit rules stored in Redis and exposes real-time metrics read from the counters written by the Rust service.
+Backend For Frontend — manages rate-limit rules in MongoDB and exposes real-time metrics read from Redis counters written by the Rust service.
 
 ### `services/ui` (React)
 Dashboard for viewing and managing rate-limit rules and live metrics.
