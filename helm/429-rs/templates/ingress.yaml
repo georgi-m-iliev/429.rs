@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: 429-rs
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: {{ .Values.ingress.gatewayHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rate-limiter
+                port:
+                  number: {{ .Values.rateLimiter.port }}
+    - host: {{ .Values.ingress.dashboardHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui
+                port:
+                  number: {{ .Values.ui.port }}

@@ -1,0 +1,64 @@
+nameOverride: ""
+fullnameOverride: ""
+imagePullSecrets: []
+
+global:
+  imageTag: latest
+
+serviceAccount:
+  create: true
+  name: ""
+
+ingress:
+  gatewayHost: gateway.local
+  dashboardHost: dashboard.local
+
+mongo:
+  host: mongo
+  image: mongo
+  tag: "8"
+  port: 27017
+  username: root
+  password: root
+  database: app
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+
+redis:
+  host: redis
+  image: redis
+  tag: 7-alpine
+  port: 6379
+
+bff:
+  image: acr429rs.azurecr.io/429rs-bff
+  tag: latest
+  replicaCount: 1
+  port: 8001
+
+rateLimiter:
+  image: acr429rs.azurecr.io/429rs-rate-limiter
+  port: 3000
+  replicaCount: 1
+  env:
+    rateLimit: "10"
+    windowSeconds: "60"
+    rustLog: "rate_limiter=info,tower_http=debug"
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+
+ui:
+  image: acr429rs.azurecr.io/429rs-ui
+  tag: latest
+  replicaCount: 1
+  port: 80
+
+fakeApi:
+  port: 8000
